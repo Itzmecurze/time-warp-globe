@@ -18,6 +18,12 @@ const TimeDisplay: React.FC<TimeDisplayProps> = ({ earthTime, millerTime, dilati
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Format years for display
+  const formatYears = (hours: number) => {
+    const years = hours / 8760; // 8760 hours in a year
+    return years < 1 ? `${(years * 12).toFixed(1)} months` : `${years.toFixed(1)} years`;
+  };
+
   return (
     <motion.div 
       className="glass-panel p-6"
@@ -28,7 +34,7 @@ const TimeDisplay: React.FC<TimeDisplayProps> = ({ earthTime, millerTime, dilati
       <div className="text-center mb-6">
         <h3 className="text-xl font-medium">Time Comparison</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          {dilationFactor.toFixed(2)}x time dilation factor
+          {dilationFactor.toFixed(0)}x time dilation factor
         </p>
       </div>
       
@@ -41,6 +47,7 @@ const TimeDisplay: React.FC<TimeDisplayProps> = ({ earthTime, millerTime, dilati
             {formatTime(earthTime)}
           </div>
           <div className="mt-2 text-xs text-muted-foreground">Standard time</div>
+          <div className="mt-1 text-sm">{formatYears(earthTime / 3600)}</div>
         </div>
         
         <div className="text-center">
@@ -51,12 +58,15 @@ const TimeDisplay: React.FC<TimeDisplayProps> = ({ earthTime, millerTime, dilati
             {formatTime(millerTime)}
           </div>
           <div className="mt-2 text-xs text-muted-foreground">Dilated time</div>
+          <div className="mt-1 text-sm">{formatYears(millerTime / 3600)}</div>
         </div>
       </div>
       
       <div className="mt-6 p-3 rounded bg-secondary/30 text-sm">
         <p className="text-center">
           1 hour on Miller's Planet = {Math.round(dilationFactor)} hours on Earth
+          <br />
+          (approximately {formatYears(dilationFactor)} on Earth)
         </p>
       </div>
     </motion.div>

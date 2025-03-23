@@ -16,6 +16,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   planetDistance,
   setPlanetDistance
 }) => {
+  // Format large numbers with commas
+  const formatNumber = (num: number): string => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
+
   return (
     <motion.div 
       className="glass-panel p-6 space-y-8"
@@ -34,20 +39,20 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             <label htmlFor="blackHoleMass" className="text-sm font-medium">
               Black Hole Mass
             </label>
-            <span className="text-xs text-muted-foreground">{blackHoleMass} M☉</span>
+            <span className="text-xs text-muted-foreground">{formatNumber(blackHoleMass)} M☉</span>
           </div>
           <Slider
             id="blackHoleMass"
-            min={1}
-            max={100}
-            step={1}
+            min={1000000}
+            max={200000000}
+            step={1000000}
             value={[blackHoleMass]}
             onValueChange={(value) => setBlackHoleMass(value[0])}
             className="my-4"
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Lighter (1 M☉)</span>
-            <span>Heavier (Gargantua: ~100 M☉)</span>
+            <span>Smaller (1M M☉)</span>
+            <span>Larger (Gargantua: ~100M M☉)</span>
           </div>
         </div>
 
@@ -75,7 +80,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
       </div>
       
       <div className="text-xs text-muted-foreground/80 italic text-center mt-4">
-        *M☉ represents solar masses, the mass of our sun
+        *M☉ represents solar masses, the mass of our sun (Gargantua is ~100 million solar masses)
       </div>
     </motion.div>
   );

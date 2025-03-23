@@ -10,31 +10,31 @@ import Footer from '@/components/Footer';
 
 const Index = () => {
   // Control states
-  const [blackHoleMass, setBlackHoleMass] = useState(70); // Solar masses (Gargantua ~ 100 million solar masses)
+  const [blackHoleMass, setBlackHoleMass] = useState(100000000); // Gargantua is approximately 100 million solar masses
   const [planetDistance, setPlanetDistance] = useState(100); // km from black hole center
   
   // Time states
   const [earthTime, setEarthTime] = useState(0);
   const [millerTime, setMillerTime] = useState(0);
-  const [dilationFactor, setDilationFactor] = useState(0);
+  const [dilationFactor, setDilationFactor] = useState(61320); // 1 hour on Miller = 7 years = 61320 hours on Earth
   
   // Calculate time dilation factor based on control values
   useEffect(() => {
     const calculateTimeDilation = () => {
-      // Constants (simplified for visualization)
-      const G = 6.67430e-11; // gravitational constant
-      const c = 299792458; // speed of light in m/s
-      const sunMass = 1.989e30; // kg
+      // In the movie, 1 hour on Miller's planet = 7 years on Earth
+      // 7 years = 7 * 365 * 24 = 61320 hours
+      const movieDilationFactor = 61320;
       
-      // Convert inputs to appropriate units
-      const massInKg = blackHoleMass * sunMass;
-      const distanceInM = planetDistance * 1000;
+      // For visualization purposes, we'll use the movie's dilation factor
+      // but allow some adjustment based on sliders
+      const massEffect = blackHoleMass / 100000000; // Normalized to Gargantua's mass
+      const distanceEffect = 100 / Math.max(1, planetDistance); // Inverse relationship with distance
       
-      // Calculate time dilation factor using simplified Schwarzschild metric
-      const factor = 1 / Math.sqrt(1 - (2 * G * massInKg) / (distanceInM * c * c));
+      // Calculate a factor that's influenced by the sliders but centered around the movie value
+      const factor = movieDilationFactor * (massEffect * distanceEffect);
       
       // Ensure the factor is reasonable (avoiding division by zero or negative values)
-      const clampedFactor = isNaN(factor) || !isFinite(factor) || factor < 1 ? 1 : factor;
+      const clampedFactor = isNaN(factor) || !isFinite(factor) || factor < 1 ? 61320 : factor;
       
       setDilationFactor(clampedFactor);
     };
