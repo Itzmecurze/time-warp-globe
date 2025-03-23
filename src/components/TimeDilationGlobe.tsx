@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -7,13 +6,16 @@ import { motion } from 'framer-motion';
 interface TimeDilationGlobeProps {
   earthTime: number;
   millerTime: number;
+  planetDistance: number; // Added prop to receive distance from parent
 }
 
-const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, millerTime }) => {
+const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, millerTime, planetDistance }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const earthGroupRef = useRef<THREE.Group | null>(null);
   const millerGroupRef = useRef<THREE.Group | null>(null);
+  const blackHoleRef = useRef<THREE.Mesh | null>(null);
+  const enduranceRef = useRef<THREE.Group | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [texturesLoaded, setTexturesLoaded] = useState(false);
   const textureLoader = new THREE.TextureLoader();
@@ -52,6 +54,27 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
     });
   }, []);
 
+  // Update Miller's planet position based on distance slider
+  useEffect(() => {
+    if (millerGroupRef.current && blackHoleRef.current) {
+      // Calculate position based on distance (normalized value)
+      const baseDistance = 5; // Minimum distance from black hole
+      const maxDistanceAdd = 8; // Maximum additional distance
+      
+      // Apply distance from slider (mapped to a reasonable 3D range)
+      const normalizedDistance = planetDistance / 500; // Slider max is 500
+      const distanceMultiplier = baseDistance + (normalizedDistance * maxDistanceAdd);
+      
+      // Position Miller's planet based on the distance
+      millerGroupRef.current.position.set(distanceMultiplier, 0, 0);
+      
+      // If Endurance exists, position it between the black hole and Miller's planet
+      if (enduranceRef.current) {
+        enduranceRef.current.position.set(distanceMultiplier - 1.5, 0.5, 0);
+      }
+    }
+  }, [planetDistance]);
+
   useEffect(() => {
     // Don't initialize if the container isn't ready
     if (!mountRef.current) return;
@@ -67,7 +90,8 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
       0.1, 
       1000
     );
-    camera.position.z = 8;
+    camera.position.z = 15; // Moved camera back to see more of the scene
+    camera.position.y = 5; // Slight top-down view
 
     // Renderer setup
     const renderer = new THREE.WebGLRenderer({ 
@@ -110,15 +134,111 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
 
     // Earth Group
     const earthGroup = new THREE.Group();
-    earthGroup.position.set(-2.5, 0, 0);
+    earthGroup.position.set(-10, 0, -5); // Move Earth further to the left and back
     scene.add(earthGroup);
     earthGroupRef.current = earthGroup;
 
     // Miller Planet Group
     const millerGroup = new THREE.Group();
-    millerGroup.position.set(2.5, 0, 0);
+    millerGroup.position.set(5, 0, 0); // Initial position, will be updated by the distance effect
     scene.add(millerGroup);
     millerGroupRef.current = millerGroup;
+
+    // Gargantua Black Hole
+    const blackHoleGroup = new THREE.Group();
+    blackHoleGroup.position.set(0, 0, 0);
+    scene.add(blackHoleGroup);
+    
+    // Create Gargantua with accretion disk
+    const blackHoleGeometry = new THREE.SphereGeometry(2, 64, 64);
+    const blackHoleMaterial = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+    });
+    const blackHole = new THREE.Mesh(blackHoleGeometry, blackHoleMaterial);
+    blackHoleGroup.add(blackHole);
+    blackHoleRef.current = blackHole;
+    
+    // Accretion disk
+    const accretionDiskGeometry = new THREE.RingGeometry(2.2, 6, 64);
+    const accretionDiskMaterial = new THREE.MeshBasicMaterial({
+      color: 0x5290F2,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.8,
+    });
+    const accretionDisk = new THREE.Mesh(accretionDiskGeometry, accretionDiskMaterial);
+    accretionDisk.rotation.x = Math.PI / 2; // Rotate to be flat
+    blackHoleGroup.add(accretionDisk);
+    
+    // Add a glow effect
+    const glowGeometry = new THREE.SphereGeometry(2.1, 32, 32);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: 0x5290F2,
+      transparent: true,
+      opacity: 0.3,
+    });
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    blackHoleGroup.add(glow);
+
+    // Endurance Spacecraft
+    const enduranceGroup = new THREE.Group();
+    // Position will be updated based on Miller's position
+    enduranceGroup.position.set(3.5, 0.5, 0);
+    scene.add(enduranceGroup);
+    enduranceRef.current = enduranceGroup;
+    
+    // Create stylized Endurance with a central hub and radiating arms
+    const hubGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 16);
+    const hubMaterial = new THREE.MeshPhongMaterial({
+      color: 0xCCCCCC,
+      shininess: 70
+    });
+    const hub = new THREE.Mesh(hubGeometry, hubMaterial);
+    hub.rotation.x = Math.PI / 2; // Rotate to be flat
+    enduranceGroup.add(hub);
+    
+    // Create the radiating arms of Endurance
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      const armLength = 0.4;
+      
+      const armGeometry = new THREE.BoxGeometry(0.05, 0.05, armLength);
+      const armMaterial = new THREE.MeshPhongMaterial({
+        color: 0xAAAAAA,
+        shininess: 50
+      });
+      const arm = new THREE.Mesh(armGeometry, armMaterial);
+      
+      arm.position.set(
+        Math.cos(angle) * armLength / 2,
+        Math.sin(angle) * armLength / 2,
+        0
+      );
+      arm.rotation.z = angle;
+      
+      enduranceGroup.add(arm);
+      
+      // Add modules at the end of each arm
+      if (i % 3 === 0) { // Only add modules to 4 arms
+        const moduleGeometry = new THREE.BoxGeometry(0.15, 0.1, 0.2);
+        const moduleMaterial = new THREE.MeshPhongMaterial({
+          color: 0xFFFFFF,
+          shininess: 60
+        });
+        const module = new THREE.Mesh(moduleGeometry, moduleMaterial);
+        
+        module.position.set(
+          Math.cos(angle) * armLength,
+          Math.sin(angle) * armLength,
+          0
+        );
+        
+        enduranceGroup.add(module);
+      }
+    }
+    
+    // Scale the Endurance down to appropriate size
+    enduranceGroup.scale.set(0.5, 0.5, 0.5);
 
     // Create Earth with realistic textures
     const earthGeometry = new THREE.SphereGeometry(1, 64, 64);
@@ -205,28 +325,28 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
       earthGroup.add(earthAtmosphere);
     }
 
-    // Create Miller planet with realistic water world appearance
+    // Create Miller planet like in the movie - shallow ocean world with massive waves
     const millerGeometry = new THREE.SphereGeometry(1, 64, 64);
     
     try {
-      // Load Miller planet texture
+      // Load Miller planet texture - a water world texture
       const millerMap = textureLoader.load('/miller-map.jpg', undefined, undefined, 
         () => console.error("Couldn't load miller-map.jpg, using default color"));
       
-      // Miller base material - deep blue ocean world
+      // Miller base material - realistic water world like in the movie
       const millerMaterial = new THREE.MeshPhongMaterial({
         map: millerMap,
-        color: 0x2E5D84,
-        specular: new THREE.Color(0xAAAAFF),
-        shininess: 75,
+        color: 0x1A5276, // Deeper blue color like in the movie
+        specular: new THREE.Color(0xFFFFFF),
+        shininess: 100,
       });
       const miller = new THREE.Mesh(millerGeometry, millerMaterial);
       millerGroup.add(miller);
       
-      // Miller water surface - moving, reflective water
+      // Miller water surface - to simulate the shallow water with massive waves
       const millerWaterGeometry = new THREE.SphereGeometry(1.02, 64, 64);
       const millerWaterMaterial = new THREE.MeshPhongMaterial({
-        color: 0x7CAFD6,
+        color: 0x85C1E9, // Lighter blue for shallow water
         transparent: true,
         opacity: 0.7,
         specular: new THREE.Color(0xFFFFFF),
@@ -235,23 +355,46 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
       const millerWater = new THREE.Mesh(millerWaterGeometry, millerWaterMaterial);
       millerGroup.add(millerWater);
       
-      // Animated waves for Miller planet
-      const millerWavesGeometry = new THREE.SphereGeometry(1.022, 64, 64);
-      const millerWavesMaterial = new THREE.MeshPhongMaterial({
-        color: 0x33C3F0,
-        transparent: true,
-        opacity: 0.3,
-        wireframe: true,
-      });
-      const millerWaves = new THREE.Mesh(millerWavesGeometry, millerWavesMaterial);
-      millerGroup.add(millerWaves);
+      // Animated massive waves for Miller planet - like in the movie
+      const waveCount = 6; // Number of wave rings
+      const waveHeight = 0.2; // Height of waves
       
-      // Miller atmosphere - thick and visible
-      const millerAtmosphereGeometry = new THREE.SphereGeometry(1.08, 64, 64);
+      for (let i = 0; i < waveCount; i++) {
+        const waveDistance = 1.05 + (i * 0.05); // Increasing distance from planet
+        const waveGeometry = new THREE.TorusGeometry(waveDistance, 0.02, 16, 100);
+        const waveMaterial = new THREE.MeshPhongMaterial({
+          color: 0xAED6F1,
+          transparent: true,
+          opacity: 0.6 - (i * 0.1),
+          shininess: 90,
+        });
+        const wave = new THREE.Mesh(waveGeometry, waveMaterial);
+        
+        // Randomly rotate each wave ring
+        wave.rotation.x = Math.random() * Math.PI;
+        wave.rotation.y = Math.random() * Math.PI;
+        
+        // Store initial rotation for animation
+        wave.userData = {
+          initialRotation: {
+            x: wave.rotation.x,
+            y: wave.rotation.y,
+            z: wave.rotation.z
+          },
+          speed: 0.005 + (Math.random() * 0.02),
+          amplitude: waveHeight,
+          heightPhase: Math.random() * Math.PI * 2
+        };
+        
+        millerGroup.add(wave);
+      }
+      
+      // Miller atmosphere - misty and hazy like in the movie
+      const millerAtmosphereGeometry = new THREE.SphereGeometry(1.3, 64, 64);
       const millerAtmosphereMaterial = new THREE.MeshPhongMaterial({
-        color: 0x7CAFD6,
+        color: 0xD6EAF8,
         transparent: true,
-        opacity: 0.3,
+        opacity: 0.15,
         side: THREE.BackSide
       });
       const millerAtmosphere = new THREE.Mesh(millerAtmosphereGeometry, millerAtmosphereMaterial);
@@ -293,9 +436,9 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
       millerGroup.add(millerAtmosphere);
     }
 
-    // Create glow effect for black hole (which affects Miller)
-    const blackHoleLight = new THREE.PointLight(0x5290F2, 7, 15);
-    blackHoleLight.position.set(5, 0, -5);
+    // Create glow effect for black hole
+    const blackHoleLight = new THREE.PointLight(0x5290F2, 5, 15);
+    blackHoleLight.position.set(0, 0, 0);
     scene.add(blackHoleLight);
 
     // Add orbit controls
@@ -304,7 +447,7 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
     controls.dampingFactor = 0.05;
     controls.rotateSpeed = 0.5;
     controls.minDistance = 5;
-    controls.maxDistance = 15;
+    controls.maxDistance = 30;
     controls.enablePan = false;
 
     // Resize handler
@@ -341,23 +484,40 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
       if (millerGroupRef.current) {
         millerGroupRef.current.rotation.y += 0.0005;
         
-        // Find and animate Miller waves
-        const waves = millerGroupRef.current.children.find(child => 
-          child instanceof THREE.Mesh && 
-          child.material instanceof THREE.MeshPhongMaterial && 
-          child.material.wireframe === true
+        // Animate the wave rings on Miller's planet
+        millerGroupRef.current.children.forEach(child => {
+          if (child instanceof THREE.Mesh && 
+              child.geometry instanceof THREE.TorusGeometry) {
+            
+            const userData = child.userData;
+            if (userData.initialRotation) {
+              // Rotate the wave ring
+              child.rotation.x += userData.speed;
+              child.rotation.z += userData.speed * 0.7;
+              
+              // Simulate rising and falling waves
+              const time = Date.now() * 0.001;
+              const scale = 1 + Math.sin(time + userData.heightPhase) * 0.1;
+              child.scale.set(1, 1, scale);
+            }
+          }
+        });
+      }
+      
+      // Rotate Endurance slowly
+      if (enduranceRef.current) {
+        enduranceRef.current.rotation.z += 0.001;
+      }
+      
+      // Animate black hole accretion disk
+      if (blackHoleRef.current && blackHoleRef.current.parent) {
+        const accretionDisk = blackHoleRef.current.parent.children.find(
+          child => child instanceof THREE.Mesh && 
+                  child.geometry instanceof THREE.RingGeometry
         );
-        if (waves) {
-          waves.rotation.y += 0.002; // Waves move faster than the planet
-          waves.rotation.x += 0.0005;
-          
-          // Subtle wave pulsing effect
-          const time = Date.now() * 0.001;
-          waves.scale.set(
-            1 + Math.sin(time) * 0.005,
-            1 + Math.sin(time) * 0.005, 
-            1 + Math.sin(time) * 0.005
-          );
+        
+        if (accretionDisk) {
+          accretionDisk.rotation.z += 0.001;
         }
       }
       
@@ -409,9 +569,12 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
         animate={{ opacity: isLoading ? 0 : 1 }}
         transition={{ duration: 1 }}
       />
-      <div className="absolute bottom-10 left-0 right-0 flex justify-center space-x-20 pointer-events-none">
+      <div className="absolute bottom-10 left-0 right-0 flex justify-center space-x-36 pointer-events-none">
         <div className="text-center">
           <div className="text-sm uppercase tracking-wider text-foreground/70">Earth</div>
+        </div>
+        <div className="text-center">
+          <div className="text-sm uppercase tracking-wider text-foreground/70">Gargantua</div>
         </div>
         <div className="text-center">
           <div className="text-sm uppercase tracking-wider text-foreground/70">Miller's Planet</div>

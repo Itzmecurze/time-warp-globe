@@ -80,7 +80,11 @@ const Index = () => {
         {/* Visualization Section */}
         <section className="py-8">
           <div className="container mx-auto px-6">
-            <TimeDilationGlobe earthTime={earthTime} millerTime={millerTime} />
+            <TimeDilationGlobe 
+              earthTime={earthTime} 
+              millerTime={millerTime}
+              planetDistance={planetDistance} 
+            />
           </div>
         </section>
         
