@@ -15,6 +15,42 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
   const earthGroupRef = useRef<THREE.Group | null>(null);
   const millerGroupRef = useRef<THREE.Group | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [texturesLoaded, setTexturesLoaded] = useState(false);
+  const textureLoader = new THREE.TextureLoader();
+
+  // Preload textures
+  useEffect(() => {
+    const texturePaths = [
+      '/earth-map.jpg', 
+      '/earth-normal.jpg',
+      '/earth-specular.jpg',
+      '/earth-clouds.png',
+      '/earth-night.jpg',
+      '/miller-map.jpg',
+    ];
+    
+    let loadedCount = 0;
+    
+    texturePaths.forEach(path => {
+      textureLoader.load(path, 
+        () => {
+          loadedCount++;
+          if (loadedCount === texturePaths.length) {
+            setTexturesLoaded(true);
+          }
+        },
+        undefined,
+        (err) => {
+          console.error(`Error loading texture ${path}:`, err);
+          // Continue even if some textures fail to load
+          loadedCount++;
+          if (loadedCount === texturePaths.length) {
+            setTexturesLoaded(true);
+          }
+        }
+      );
+    });
+  }, []);
 
   useEffect(() => {
     // Don't initialize if the container isn't ready
@@ -22,7 +58,7 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
 
     // Scene setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#0A0A0A');
+    scene.background = new THREE.Color('#000511');
 
     // Camera setup
     const camera = new THREE.PerspectiveCamera(
@@ -40,6 +76,7 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
     });
     renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -47,7 +84,7 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
     const ambientLight = new THREE.AmbientLight(0x404040, 2);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
     directionalLight.position.set(5, 3, 5);
     scene.add(directionalLight);
 
@@ -83,76 +120,181 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
     scene.add(millerGroup);
     millerGroupRef.current = millerGroup;
 
-    // Earth planet
+    // Create Earth with realistic textures
     const earthGeometry = new THREE.SphereGeometry(1, 64, 64);
-    const earthMaterial = new THREE.MeshStandardMaterial({
-      color: 0x2E4784,
-      roughness: 0.7,
-      metalness: 0.1
-    });
-    const earth = new THREE.Mesh(earthGeometry, earthMaterial);
-    earthGroup.add(earth);
-
-    // Earth continents
-    const earthContinentsGeometry = new THREE.SphereGeometry(1.001, 64, 64);
-    const earthContinentsMaterial = new THREE.MeshStandardMaterial({
-      color: 0x5A8C5A,
-      roughness: 0.8,
-      metalness: 0.1,
-      transparent: true,
-      opacity: 0.9,
-      alphaMap: new THREE.TextureLoader().load('/earth-alpha.jpg'),
-    });
     
-    const earthContinents = new THREE.Mesh(earthContinentsGeometry, earthContinentsMaterial);
-    earthGroup.add(earthContinents);
+    // Try to load textures but use fallbacks if they fail
+    try {
+      // Check if the textures have been loaded
+      const earthMap = textureLoader.load('/earth-map.jpg', undefined, undefined, 
+        () => console.error("Couldn't load earth-map.jpg, using default color"));
+      const earthNormalMap = textureLoader.load('/earth-normal.jpg', undefined, undefined, 
+        () => console.error("Couldn't load earth-normal.jpg, using default normal"));
+      const earthSpecularMap = textureLoader.load('/earth-specular.jpg', undefined, undefined, 
+        () => console.error("Couldn't load earth-specular.jpg, using default specular"));
+      const earthCloudsMap = textureLoader.load('/earth-clouds.png', undefined, undefined, 
+        () => console.error("Couldn't load earth-clouds.png, using default clouds"));
+      const earthNightMap = textureLoader.load('/earth-night.jpg', undefined, undefined, 
+        () => console.error("Couldn't load earth-night.jpg, using default night"));
+      
+      // Earth main sphere - oceans and base
+      const earthMaterial = new THREE.MeshPhongMaterial({
+        map: earthMap,
+        normalMap: earthNormalMap,
+        specularMap: earthSpecularMap,
+        shininess: 15,
+        specular: new THREE.Color(0x333333)
+      });
+      const earth = new THREE.Mesh(earthGeometry, earthMaterial);
+      earthGroup.add(earth);
+      
+      // Earth clouds layer
+      const earthCloudsGeometry = new THREE.SphereGeometry(1.005, 64, 64);
+      const earthCloudsMaterial = new THREE.MeshPhongMaterial({
+        map: earthCloudsMap,
+        transparent: true,
+        opacity: 0.4
+      });
+      const earthClouds = new THREE.Mesh(earthCloudsGeometry, earthCloudsMaterial);
+      earthGroup.add(earthClouds);
+      
+      // Earth atmosphere glow
+      const earthAtmosphereGeometry = new THREE.SphereGeometry(1.05, 64, 64);
+      const earthAtmosphereMaterial = new THREE.MeshPhongMaterial({
+        color: 0x0EA5E9,
+        transparent: true,
+        opacity: 0.1,
+        side: THREE.BackSide
+      });
+      const earthAtmosphere = new THREE.Mesh(earthAtmosphereGeometry, earthAtmosphereMaterial);
+      earthGroup.add(earthAtmosphere);
+      
+    } catch (error) {
+      console.error("Error setting up Earth textures:", error);
+      
+      // Fallback to simple spheres if texture loading fails
+      const earthMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2E4784,
+        roughness: 0.7,
+        metalness: 0.1
+      });
+      const earth = new THREE.Mesh(earthGeometry, earthMaterial);
+      earthGroup.add(earth);
+      
+      // Earth continents fallback
+      const earthContinentsGeometry = new THREE.SphereGeometry(1.001, 64, 64);
+      const earthContinentsMaterial = new THREE.MeshStandardMaterial({
+        color: 0x5A8C5A,
+        roughness: 0.8,
+        metalness: 0.1,
+        transparent: true,
+        opacity: 0.9
+      });
+      const earthContinents = new THREE.Mesh(earthContinentsGeometry, earthContinentsMaterial);
+      earthGroup.add(earthContinents);
+      
+      // Earth atmosphere fallback
+      const earthAtmosphereGeometry = new THREE.SphereGeometry(1.05, 64, 64);
+      const earthAtmosphereMaterial = new THREE.MeshStandardMaterial({
+        color: 0x8ab5eb,
+        transparent: true,
+        opacity: 0.1,
+        side: THREE.BackSide
+      });
+      const earthAtmosphere = new THREE.Mesh(earthAtmosphereGeometry, earthAtmosphereMaterial);
+      earthGroup.add(earthAtmosphere);
+    }
 
-    // Earth atmosphere
-    const earthAtmosphereGeometry = new THREE.SphereGeometry(1.05, 64, 64);
-    const earthAtmosphereMaterial = new THREE.MeshStandardMaterial({
-      color: 0x8ab5eb,
-      transparent: true,
-      opacity: 0.1,
-      side: THREE.BackSide
-    });
-    const earthAtmosphere = new THREE.Mesh(earthAtmosphereGeometry, earthAtmosphereMaterial);
-    earthGroup.add(earthAtmosphere);
-
-    // Miller planet
+    // Create Miller planet with realistic water world appearance
     const millerGeometry = new THREE.SphereGeometry(1, 64, 64);
-    const millerMaterial = new THREE.MeshStandardMaterial({
-      color: 0x2E5D84,
-      roughness: 0.5,
-      metalness: 0.3
-    });
-    const miller = new THREE.Mesh(millerGeometry, millerMaterial);
-    millerGroup.add(miller);
-
-    // Miller surface
-    const millerSurfaceGeometry = new THREE.SphereGeometry(1.002, 64, 64);
-    const millerSurfaceMaterial = new THREE.MeshStandardMaterial({
-      color: 0x7CAFD6,
-      roughness: 0.3,
-      metalness: 0.5,
-      transparent: true,
-      opacity: 0.8
-    });
-    const millerSurface = new THREE.Mesh(millerSurfaceGeometry, millerSurfaceMaterial);
-    millerGroup.add(millerSurface);
-
-    // Miller atmosphere/water
-    const millerAtmosphereGeometry = new THREE.SphereGeometry(1.05, 64, 64);
-    const millerAtmosphereMaterial = new THREE.MeshStandardMaterial({
-      color: 0x7CAFD6,
-      transparent: true,
-      opacity: 0.2,
-      side: THREE.BackSide
-    });
-    const millerAtmosphere = new THREE.Mesh(millerAtmosphereGeometry, millerAtmosphereMaterial);
-    millerGroup.add(millerAtmosphere);
+    
+    try {
+      // Load Miller planet texture
+      const millerMap = textureLoader.load('/miller-map.jpg', undefined, undefined, 
+        () => console.error("Couldn't load miller-map.jpg, using default color"));
+      
+      // Miller base material - deep blue ocean world
+      const millerMaterial = new THREE.MeshPhongMaterial({
+        map: millerMap,
+        color: 0x2E5D84,
+        specular: new THREE.Color(0xAAAAFF),
+        shininess: 75,
+      });
+      const miller = new THREE.Mesh(millerGeometry, millerMaterial);
+      millerGroup.add(miller);
+      
+      // Miller water surface - moving, reflective water
+      const millerWaterGeometry = new THREE.SphereGeometry(1.02, 64, 64);
+      const millerWaterMaterial = new THREE.MeshPhongMaterial({
+        color: 0x7CAFD6,
+        transparent: true,
+        opacity: 0.7,
+        specular: new THREE.Color(0xFFFFFF),
+        shininess: 100,
+      });
+      const millerWater = new THREE.Mesh(millerWaterGeometry, millerWaterMaterial);
+      millerGroup.add(millerWater);
+      
+      // Animated waves for Miller planet
+      const millerWavesGeometry = new THREE.SphereGeometry(1.022, 64, 64);
+      const millerWavesMaterial = new THREE.MeshPhongMaterial({
+        color: 0x33C3F0,
+        transparent: true,
+        opacity: 0.3,
+        wireframe: true,
+      });
+      const millerWaves = new THREE.Mesh(millerWavesGeometry, millerWavesMaterial);
+      millerGroup.add(millerWaves);
+      
+      // Miller atmosphere - thick and visible
+      const millerAtmosphereGeometry = new THREE.SphereGeometry(1.08, 64, 64);
+      const millerAtmosphereMaterial = new THREE.MeshPhongMaterial({
+        color: 0x7CAFD6,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.BackSide
+      });
+      const millerAtmosphere = new THREE.Mesh(millerAtmosphereGeometry, millerAtmosphereMaterial);
+      millerGroup.add(millerAtmosphere);
+      
+    } catch (error) {
+      console.error("Error setting up Miller textures:", error);
+      
+      // Fallback Miller planet
+      const millerMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2E5D84,
+        roughness: 0.5,
+        metalness: 0.3
+      });
+      const miller = new THREE.Mesh(millerGeometry, millerMaterial);
+      millerGroup.add(miller);
+      
+      // Miller surface fallback
+      const millerSurfaceGeometry = new THREE.SphereGeometry(1.002, 64, 64);
+      const millerSurfaceMaterial = new THREE.MeshStandardMaterial({
+        color: 0x7CAFD6,
+        roughness: 0.3,
+        metalness: 0.5,
+        transparent: true,
+        opacity: 0.8
+      });
+      const millerSurface = new THREE.Mesh(millerSurfaceGeometry, millerSurfaceMaterial);
+      millerGroup.add(millerSurface);
+      
+      // Miller atmosphere/water fallback
+      const millerAtmosphereGeometry = new THREE.SphereGeometry(1.05, 64, 64);
+      const millerAtmosphereMaterial = new THREE.MeshStandardMaterial({
+        color: 0x7CAFD6,
+        transparent: true,
+        opacity: 0.2,
+        side: THREE.BackSide
+      });
+      const millerAtmosphere = new THREE.Mesh(millerAtmosphereGeometry, millerAtmosphereMaterial);
+      millerGroup.add(millerAtmosphere);
+    }
 
     // Create glow effect for black hole (which affects Miller)
-    const blackHoleLight = new THREE.PointLight(0x5290F2, 5, 10);
+    const blackHoleLight = new THREE.PointLight(0x5290F2, 7, 15);
     blackHoleLight.position.set(5, 0, -5);
     scene.add(blackHoleLight);
 
@@ -183,11 +325,40 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
       // Rotate Earth slowly
       if (earthGroupRef.current) {
         earthGroupRef.current.rotation.y += 0.002;
+        
+        // Find and rotate Earth clouds separately
+        const clouds = earthGroupRef.current.children.find(child => 
+          child instanceof THREE.Mesh && 
+          child.geometry instanceof THREE.SphereGeometry && 
+          child.geometry.parameters.radius === 1.005
+        );
+        if (clouds) {
+          clouds.rotation.y += 0.0005; // Clouds rotate slightly differently than the planet
+        }
       }
       
       // Rotate Miller slower (time dilation effect)
       if (millerGroupRef.current) {
         millerGroupRef.current.rotation.y += 0.0005;
+        
+        // Find and animate Miller waves
+        const waves = millerGroupRef.current.children.find(child => 
+          child instanceof THREE.Mesh && 
+          child.material instanceof THREE.MeshPhongMaterial && 
+          child.material.wireframe === true
+        );
+        if (waves) {
+          waves.rotation.y += 0.002; // Waves move faster than the planet
+          waves.rotation.x += 0.0005;
+          
+          // Subtle wave pulsing effect
+          const time = Date.now() * 0.001;
+          waves.scale.set(
+            1 + Math.sin(time) * 0.005,
+            1 + Math.sin(time) * 0.005, 
+            1 + Math.sin(time) * 0.005
+          );
+        }
       }
       
       controls.update();
@@ -205,7 +376,7 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
       }
       renderer.dispose();
     };
-  }, []);
+  }, [texturesLoaded]);
 
   // Update rotations based on time dilation
   useEffect(() => {
