@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -14,6 +13,7 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const earthGroupRef = useRef<THREE.Group | null>(null);
   const millerGroupRef = useRef<THREE.Group | null>(null);
+  const millerWavesRef = useRef<THREE.Mesh[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [texturesLoaded, setTexturesLoaded] = useState(false);
   const textureLoader = new THREE.TextureLoader();
@@ -205,7 +205,7 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
       earthGroup.add(earthAtmosphere);
     }
 
-    // Create Miller planet with realistic water world appearance
+    // Create Miller planet with realistic water world appearance as in the film
     const millerGeometry = new THREE.SphereGeometry(1, 64, 64);
     
     try {
@@ -213,45 +213,93 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
       const millerMap = textureLoader.load('/miller-map.jpg', undefined, undefined, 
         () => console.error("Couldn't load miller-map.jpg, using default color"));
       
-      // Miller base material - deep blue ocean world
+      // Miller base material - shallow blue ocean world with sandy bottom
       const millerMaterial = new THREE.MeshPhongMaterial({
         map: millerMap,
-        color: 0x2E5D84,
-        specular: new THREE.Color(0xAAAAFF),
-        shininess: 75,
+        color: 0x70A0C0, // Lighter blue for shallow water
+        specular: new THREE.Color(0xFFFFFF),
+        shininess: 100,
       });
       const miller = new THREE.Mesh(millerGeometry, millerMaterial);
       millerGroup.add(miller);
       
-      // Miller water surface - moving, reflective water
-      const millerWaterGeometry = new THREE.SphereGeometry(1.02, 64, 64);
+      // Miller water surface - shallow, clear water
+      const millerWaterGeometry = new THREE.SphereGeometry(1.01, 64, 64);
       const millerWaterMaterial = new THREE.MeshPhongMaterial({
-        color: 0x7CAFD6,
+        color: 0x88B0D0, // Light blue for shallow water
         transparent: true,
-        opacity: 0.7,
+        opacity: 0.65,
         specular: new THREE.Color(0xFFFFFF),
-        shininess: 100,
+        shininess: 120,
       });
       const millerWater = new THREE.Mesh(millerWaterGeometry, millerWaterMaterial);
       millerGroup.add(millerWater);
       
-      // Animated waves for Miller planet
-      const millerWavesGeometry = new THREE.SphereGeometry(1.022, 64, 64);
-      const millerWavesMaterial = new THREE.MeshPhongMaterial({
-        color: 0x33C3F0,
-        transparent: true,
-        opacity: 0.3,
-        wireframe: true,
-      });
-      const millerWaves = new THREE.Mesh(millerWavesGeometry, millerWavesMaterial);
-      millerGroup.add(millerWaves);
+      // Create multiple massive wave formations as seen in the movie
+      const createWave = (height: number, width: number, position: THREE.Vector3, rotation: THREE.Euler) => {
+        // Create wave geometry - use box for the massive, wall-like waves from the film
+        const waveGeometry = new THREE.BoxGeometry(width, height, 0.1);
+        const waveMaterial = new THREE.MeshPhongMaterial({
+          color: 0xA0C0D5,
+          transparent: true,
+          opacity: 0.9,
+          specular: new THREE.Color(0xFFFFFF),
+          shininess: 80,
+        });
+        
+        const wave = new THREE.Mesh(waveGeometry, waveMaterial);
+        wave.position.copy(position);
+        wave.rotation.copy(rotation);
+        millerGroup.add(wave);
+        return wave;
+      };
       
-      // Miller atmosphere - thick and visible
-      const millerAtmosphereGeometry = new THREE.SphereGeometry(1.08, 64, 64);
+      // Create the massive wall-like waves as seen in the film
+      const waves = [];
+      
+      // Massive primary wave in the distance (the iconic one from the film)
+      const primaryWave = createWave(
+        2.5, // Tall height
+        4, // Wide width
+        new THREE.Vector3(0, 0, -2), // In the distance
+        new THREE.Euler(0, 0, 0)
+      );
+      waves.push(primaryWave);
+      
+      // Second approaching wave
+      const secondaryWave = createWave(
+        2, // Slightly smaller
+        3.5, 
+        new THREE.Vector3(1.5, 0, -1.5), // Different position
+        new THREE.Euler(0, Math.PI * 0.2, 0)
+      );
+      waves.push(secondaryWave);
+      
+      // Small foreground waves
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2;
+        const smallWave = createWave(
+          0.2 + Math.random() * 0.2, // Small height
+          0.8 + Math.random() * 0.4,
+          new THREE.Vector3(
+            Math.cos(angle) * 1.1,
+            -0.9, // Near the bottom of the planet
+            Math.sin(angle) * 1.1
+          ),
+          new THREE.Euler(Math.PI * 0.4, angle, 0)
+        );
+        waves.push(smallWave);
+      }
+      
+      // Store waves for animation
+      millerWavesRef.current = waves;
+      
+      // Miller atmosphere - thin and misty
+      const millerAtmosphereGeometry = new THREE.SphereGeometry(1.15, 64, 64);
       const millerAtmosphereMaterial = new THREE.MeshPhongMaterial({
-        color: 0x7CAFD6,
+        color: 0xC8D8E8, // Light bluish-white mist
         transparent: true,
-        opacity: 0.3,
+        opacity: 0.15,
         side: THREE.BackSide
       });
       const millerAtmosphere = new THREE.Mesh(millerAtmosphereGeometry, millerAtmosphereMaterial);
@@ -340,24 +388,36 @@ const TimeDilationGlobe: React.FC<TimeDilationGlobeProps> = ({ earthTime, miller
       // Rotate Miller slower (time dilation effect)
       if (millerGroupRef.current) {
         millerGroupRef.current.rotation.y += 0.0005;
+      }
+      
+      // Animate the massive waves
+      if (millerWavesRef.current.length > 0) {
+        const time = Date.now() * 0.001;
         
-        // Find and animate Miller waves
-        const waves = millerGroupRef.current.children.find(child => 
-          child instanceof THREE.Mesh && 
-          child.material instanceof THREE.MeshPhongMaterial && 
-          child.material.wireframe === true
-        );
-        if (waves) {
-          waves.rotation.y += 0.002; // Waves move faster than the planet
-          waves.rotation.x += 0.0005;
-          
-          // Subtle wave pulsing effect
-          const time = Date.now() * 0.001;
-          waves.scale.set(
-            1 + Math.sin(time) * 0.005,
-            1 + Math.sin(time) * 0.005, 
-            1 + Math.sin(time) * 0.005
-          );
+        // Primary massive wave - slowly approaching
+        if (millerWavesRef.current[0]) {
+          const primaryWave = millerWavesRef.current[0];
+          // Simulate the wave moving
+          primaryWave.position.z = -2 + Math.sin(time * 0.1) * 0.2;
+          // Slight rotation and bobbing
+          primaryWave.rotation.z = Math.sin(time * 0.2) * 0.03;
+        }
+        
+        // Secondary wave
+        if (millerWavesRef.current[1]) {
+          const secondaryWave = millerWavesRef.current[1];
+          secondaryWave.position.z = -1.5 + Math.sin(time * 0.15 + 1) * 0.15;
+          secondaryWave.rotation.z = Math.sin(time * 0.25 + 2) * 0.02;
+        }
+        
+        // Small waves - more dynamic movement
+        for (let i = 2; i < millerWavesRef.current.length; i++) {
+          const wave = millerWavesRef.current[i];
+          if (wave) {
+            // More rapid and varied movement for small waves
+            wave.position.y = -0.9 + Math.sin(time * 0.8 + i) * 0.05;
+            wave.rotation.x = Math.PI * 0.4 + Math.sin(time * 1.2 + i * 2) * 0.1;
+          }
         }
       }
       
